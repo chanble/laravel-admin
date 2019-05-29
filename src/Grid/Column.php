@@ -3,15 +3,43 @@
 namespace Encore\Admin\Grid;
 
 use Closure;
+use Encore\Admin\Admin;
 use Encore\Admin\Grid;
 use Encore\Admin\Grid\Displayers\AbstractDisplayer;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
+/**
+ * Class Column.
+ *
+ * @method Displayers\Editable      editable()
+ * @method Displayers\SwitchDisplay switch ($states = [])
+ * @method Displayers\SwitchGroup   switchGroup($columns = [], $states = [])
+ * @method Displayers\Select        select($options = [])
+ * @method Displayers\Image         image($server = '', $width = 200, $height = 200)
+ * @method Displayers\Label         label($style = 'success')
+ * @method Displayers\Button        button($style = null)
+ * @method Displayers\Link          link($href = '', $target = '_blank')
+ * @method Displayers\Badge         badge($style = 'red')
+ * @method Displayers\ProgressBar   progressBar($style = 'primary', $size = 'sm', $max = 100)
+ * @method Displayers\Radio         radio($options = [])
+ * @method Displayers\Checkbox      checkbox($options = [])
+ * @method Displayers\Orderable     orderable($column, $label = '')
+ * @method Displayers\Table         table($titles = [])
+ * @method Displayers\Expand        expand($callback = null)
+ * @method Displayers\Modal         modal($callback = null)
+ * @method Displayers\Gravatar      gravatar($size = 30)
+ * @method Displayers\Carousel      carousel(int $width = 300, int $height = 200, $server = '')
+ */
 class Column
 {
+    const SELECT_COLUMN_NAME = '__row_selector__';
+
+    const ACTION_COLUMN_NAME = '__actions__';
+
     /**
      * @var Grid
      */
@@ -51,6 +79,20 @@ class Column
      * @var array
      */
     protected $sort;
+
+    /**
+     * Help message.
+     *
+     * @var string
+     */
+    protected $help = '';
+
+    /**
+     * Cast Name.
+     *
+     * @var array
+     */
+    protected $cast;
 
     /**
      * Attributes of column.
@@ -108,8 +150,6 @@ class Column
      * @var Model
      */
     protected static $model;
-
-    const SELECT_COLUMN_NAME = '__row_selector__';
 
     /**
      * @param string $name
@@ -201,7 +241,7 @@ class Column
      */
     public static function getAttributes($name)
     {
-        return array_get(static::$htmlAttributes, $name, '');
+        return Arr::get(static::$htmlAttributes, $name, '');
     }
 
     /**
@@ -214,6 +254,18 @@ class Column
     public function style($style)
     {
         return $this->setAttributes(compact('style'));
+    }
+
+    /**
+     * Set the width of column.
+     *
+     * @param int $width
+     *
+     * @return Column
+     */
+    public function width(int $width)
+    {
+        return $this->style("width: {$width}px;");
     }
 
     /**
@@ -301,6 +353,18 @@ class Column
     }
 
     /**
+     * Set cast name for sortable.
+     *
+     * @return Column
+     */
+    public function cast($cast)
+    {
+        $this->cast = $cast;
+
+        return $this;
+    }
+
+    /**
      * Add a display callback.
      *
      * @param Closure $callback
@@ -351,7 +415,7 @@ class Column
                 return $default;
             }
 
-            return array_get($values, $value, $default);
+            return Arr::get($values, $value, $default);
         });
     }
 
@@ -369,6 +433,32 @@ class Column
 
             return view($view, compact('model', 'value'))->render();
         });
+    }
+
+    /**
+     * Hide this column by default.
+     *
+     * @return $this
+     */
+    public function hide()
+    {
+        $this->grid->hideColumns($this->getName());
+
+        return $this;
+    }
+
+    /**
+     * Add column to total-row.
+     *
+     * @param null $display
+     *
+     * @return $this
+     */
+    public function totalRow($display = null)
+    {
+        $this->grid->addTotalRow($this->name, $display);
+
+        return $this;
     }
 
     /**
@@ -433,11 +523,11 @@ class Column
     public function fill(array $data)
     {
         foreach ($data as $key => &$row) {
-            $this->original = $value = array_get($row, $this->name);
+            $this->original = $value = Arr::get($row, $this->name);
 
             $value = $this->htmlEntityEncode($value);
 
-            array_set($row, $this->name, $value);
+            Arr::set($row, $this->name, $value);
 
             if ($this->isDefinedColumn()) {
                 $this->useDefinedColumn();
@@ -445,7 +535,7 @@ class Column
 
             if ($this->hasDisplayCallbacks()) {
                 $value = $this->callDisplayCallbacks($this->original, $key);
-                array_set($row, $this->name, $value);
+                Arr::set($row, $this->name, $value);
             }
         }
 
@@ -534,8 +624,14 @@ class Column
             $icon .= "-amount-{$this->sort['type']}";
         }
 
+        // set sort value
+        $sort = ['column' => $this->name, 'type' => $type];
+        if (isset($this->cast)) {
+            $sort['cast'] = $this->cast;
+        }
+
         $query = app('request')->all();
-        $query = array_merge($query, [$this->grid->model()->getSortName() => ['column' => $this->name, 'type' => $type]]);
+        $query = array_merge($query, [$this->grid->model()->getSortName() => $sort]);
 
         $url = url()->current().'?'.http_build_query($query);
 
@@ -556,6 +652,34 @@ class Column
         }
 
         return isset($this->sort['column']) && $this->sort['column'] == $this->name;
+    }
+
+    /**
+     * Set help message for column.
+     *
+     * @param string $help
+     *
+     * @return $this|string
+     */
+    public function help($help = '')
+    {
+        if (!empty($help)) {
+            $this->help = $help;
+
+            return $this;
+        }
+
+        if (empty($this->help)) {
+            return '';
+        }
+
+        Admin::script("$('.column-help').popover();");
+
+        return <<<HELP
+<a href="javascript:void(0);" class="column-help" data-container="body" data-toggle="popover" data-trigger="hover" data-placement="bottom" data-content="{$this->help}">
+    <i class="fa fa-question-circle"></i>
+</a>
+HELP;
     }
 
     /**

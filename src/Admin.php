@@ -3,13 +3,14 @@
 namespace Encore\Admin;
 
 use Closure;
+use Encore\Admin\Auth\Database\Menu;
 use Encore\Admin\Controllers\AuthController;
 use Encore\Admin\Layout\Content;
 use Encore\Admin\Traits\HasAssets;
 use Encore\Admin\Widgets\Navbar;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Config;
 use InvalidArgumentException;
 
 /**
@@ -24,7 +25,7 @@ class Admin
      *
      * @var string
      */
-    const VERSION = '1.6.12';
+    const VERSION = '1.6.15';
 
     /**
      * @var Navbar
@@ -32,9 +33,19 @@ class Admin
     protected $navbar;
 
     /**
+     * @var array
+     */
+    protected $menu = [];
+
+    /**
      * @var string
      */
     public static $metaTitle;
+
+    /**
+     * @var string
+     */
+    public static $favicon;
 
     /**
      * @var array
@@ -91,6 +102,7 @@ class Admin
      * Build a tree.
      *
      * @param $model
+     * @param Closure|null $callable
      *
      * @return \Encore\Admin\Tree
      */
@@ -151,13 +163,46 @@ class Admin
      */
     public function menu()
     {
-        $menuModel = config('admin.database.menu_model');
+        if (!empty($this->menu)) {
+            return $this->menu;
+        }
 
-        return (new $menuModel())->toTree();
+        $menuClass = config('admin.database.menu_model');
+
+        /** @var Menu $menuModel */
+        $menuModel = new $menuClass();
+
+        return $this->menu = $menuModel->toTree();
+    }
+
+    /**
+     * @param array $menu
+     *
+     * @return array
+     */
+    public function menuLinks($menu = [])
+    {
+        if (empty($menu)) {
+            $menu = $this->menu();
+        }
+
+        $links = [];
+
+        foreach ($menu as $item) {
+            if (!empty($item['children'])) {
+                $links = array_merge($links, $this->menuLinks($item['children']));
+            } else {
+                $links[] = Arr::only($item, ['title', 'uri', 'icon']);
+            }
+        }
+
+        return $links;
     }
 
     /**
      * Set admin title.
+     *
+     * @param string $title
      *
      * @return void
      */
@@ -169,11 +214,25 @@ class Admin
     /**
      * Get admin title.
      *
-     * @return Config
+     * @return string
      */
     public function title()
     {
         return self::$metaTitle ? self::$metaTitle : config('admin.title');
+    }
+
+    /**
+     * @param null|string $favicon
+     *
+     * @return string|void
+     */
+    public function favicon($favicon = null)
+    {
+        if (is_null($favicon)) {
+            return static::$favicon;
+        }
+
+        static::$favicon = $favicon;
     }
 
     /**
@@ -217,11 +276,23 @@ class Admin
     }
 
     /**
-     * Register the auth routes.
+     * Register the laravel-admin builtin routes.
+     *
+     * @return void
+     *
+     * @deprecated Use Admin::routes() instead();
+     */
+    public function registerAuthRoutes()
+    {
+        $this->routes();
+    }
+
+    /**
+     * Register the laravel-admin builtin routes.
      *
      * @return void
      */
-    public function registerAuthRoutes()
+    public function routes()
     {
         $attributes = [
             'prefix'     => config('admin.route.prefix'),
@@ -230,15 +301,17 @@ class Admin
 
         app('router')->group($attributes, function ($router) {
 
-            /* @var \Illuminate\Routing\Router $router */
-            $router->namespace('Encore\Admin\Controllers')->group(function ($router) {
+            /* @var \Illuminate\Support\Facades\Route $router */
+            $router->namespace('\Encore\Admin\Controllers')->group(function ($router) {
 
                 /* @var \Illuminate\Routing\Router $router */
-                $router->resource('auth/users', 'UserController');
-                $router->resource('auth/roles', 'RoleController');
-                $router->resource('auth/permissions', 'PermissionController');
-                $router->resource('auth/menu', 'MenuController', ['except' => ['create']]);
-                $router->resource('auth/logs', 'LogController', ['only' => ['index', 'destroy']]);
+                $router->resource('auth/users', 'UserController')->names('admin.auth.users');
+                $router->resource('auth/roles', 'RoleController')->names('admin.auth.roles');
+                $router->resource('auth/permissions', 'PermissionController')->names('admin.auth.permissions');
+                $router->resource('auth/menu', 'MenuController', ['except' => ['create']])->names('admin.auth.menu');
+                $router->resource('auth/logs', 'LogController', ['only' => ['index', 'destroy']])->names('admin.auth.logs');
+
+                $router->post('_handle_form_', 'HandleController@handleForm')->name('admin.handle-form');
             });
 
             $authController = config('admin.auth.controller', AuthController::class);
@@ -298,8 +371,8 @@ class Admin
 
         $assets = Form::collectFieldAssets();
 
-        Admin::css($assets['css']);
-        Admin::js($assets['js']);
+        self::css($assets['css']);
+        self::js($assets['js']);
 
         $this->fireBootedCallbacks();
     }

@@ -130,6 +130,14 @@ class Model
     }
 
     /**
+     * @return EloquentModel
+     */
+    public function getOriginalModel()
+    {
+        return $this->originalModel;
+    }
+
+    /**
      * Get the eloquent model of the grid model.
      *
      * @return EloquentModel
@@ -169,6 +177,32 @@ class Model
     public function setPerPageName($name)
     {
         $this->perPageName = $name;
+
+        return $this;
+    }
+
+    /**
+     * Get per-page number.
+     *
+     * @return int
+     */
+    public function getPerPage()
+    {
+        return $this->perPage;
+    }
+
+    /**
+     * Set per-page number.
+     *
+     * @param int $perPage
+     *
+     * @return $this
+     */
+    public function setPerPage($perPage)
+    {
+        $this->perPage = $perPage;
+
+        $this->__call('paginate', [$perPage]);
 
         return $this;
     }
@@ -509,14 +543,25 @@ class Model
             return;
         }
 
-        if (str_contains($this->sort['column'], '.')) {
+        if (Str::contains($this->sort['column'], '.')) {
             $this->setRelationSort($this->sort['column']);
         } else {
             $this->resetOrderBy();
 
+            // get column. if contains "cast", set set column as cast
+            if (!empty($this->sort['cast'])) {
+                $column = "CAST({$this->sort['column']} AS {$this->sort['cast']}) {$this->sort['type']}";
+                $method = 'orderByRaw';
+                $arguments = [$column];
+            } else {
+                $column = $this->sort['column'];
+                $method = 'orderBy';
+                $arguments = [$column, $this->sort['type']];
+            }
+
             $this->queries->push([
-                'method'    => 'orderBy',
-                'arguments' => [$this->sort['column'], $this->sort['type']],
+                'method'    => $method,
+                'arguments' => $arguments,
             ]);
         }
     }

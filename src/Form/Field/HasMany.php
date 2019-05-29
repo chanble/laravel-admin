@@ -8,7 +8,7 @@ use Encore\Admin\Form\Field;
 use Encore\Admin\Form\NestedForm;
 use Illuminate\Database\Eloquent\Relations\HasMany as Relation;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 /**
@@ -94,7 +94,7 @@ class HasMany extends Field
      *
      * @param array $input
      *
-     * @return bool|Validator
+     * @return bool|\Illuminate\Contracts\Validation\Validator
      */
     public function getValidator(array $input)
     {
@@ -102,7 +102,7 @@ class HasMany extends Field
             return false;
         }
 
-        $input = array_only($input, $this->column);
+        $input = Arr::only($input, $this->column);
 
         $form = $this->buildNestedForm($this->column, $this->builder);
 
@@ -132,7 +132,7 @@ class HasMany extends Field
             );
         }
 
-        array_forget($rules, NestedForm::REMOVE_FLAG_NAME);
+        Arr::forget($rules, NestedForm::REMOVE_FLAG_NAME);
 
         if (empty($rules)) {
             return false;
@@ -157,7 +157,7 @@ class HasMany extends Field
             $newInput = $input;
         }
 
-        return Validator::make($newInput, $newRules, $this->validationMessages, $attributes);
+        return \validator($newInput, $newRules, $this->getValidationMessages(), $attributes);
     }
 
     /**
@@ -179,7 +179,7 @@ class HasMany extends Field
             }
         }
 
-        foreach (array_keys(array_dot($input)) as $key) {
+        foreach (array_keys(Arr::dot($input)) as $key) {
             if (is_string($column)) {
                 if (Str::endsWith($key, ".$column")) {
                     $attributes[$key] = $label;
@@ -251,11 +251,11 @@ class HasMany extends Field
                 /*
                  * set new key
                  */
-                array_set($input, "{$this->column}.$index.$newKey", $value);
+                Arr::set($input, "{$this->column}.$index.$newKey", $value);
                 /*
                  * forget the old key and value
                  */
-                array_forget($input, "{$this->column}.$index.$name");
+                Arr::forget($input, "{$this->column}.$index.$name");
             }
         }
     }
@@ -391,7 +391,7 @@ class HasMany extends Field
             }
         } else {
             foreach ($this->value as $data) {
-                $key = array_get($data, $relation->getRelated()->getKeyName());
+                $key = Arr::get($data, $relation->getRelated()->getKeyName());
 
                 $model = $relation->getRelated()->replicate()->forceFill($data);
 
@@ -438,7 +438,7 @@ class HasMany extends Field
          */
         $script = <<<EOT
 var index = 0;
-$('#has-many-{$this->column}').on('click', '.add', function () {
+$('#has-many-{$this->column}').off('click', '.add').on('click', '.add', function () {
 
     var tpl = $('template.{$this->column}-tpl');
 
@@ -449,7 +449,7 @@ $('#has-many-{$this->column}').on('click', '.add', function () {
     {$templateScript}
 });
 
-$('#has-many-{$this->column}').on('click', '.remove', function () {
+$('#has-many-{$this->column}').off('click', '.remove').on('click', '.remove', function () {
     $(this).closest('.has-many-{$this->column}-form').hide();
     $(this).closest('.has-many-{$this->column}-form').find('.$removeClass').val(1);
 });

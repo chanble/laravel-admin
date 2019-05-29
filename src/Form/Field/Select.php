@@ -140,8 +140,8 @@ EOT;
     /**
      * Load options for other selects on change.
      *
-     * @param string $fields
-     * @param string $sourceUrls
+     * @param array  $fields
+     * @param array  $sourceUrls
      * @param string $idField
      * @param string $textField
      *
@@ -176,10 +176,6 @@ $(document).on('change', "{$this->getElementClassSelector()}", function () {
     fields.forEach(function(field, index){
         var target = $(_this).closest('.fields-group').find('.' + fields[index]);
         promises.push(refreshOptions(urls[index] + "?q="+ _this.value, target));
-    });
-
-    $.when(promises).then(function() {
-        console.log('开始更新其它select的选择options');
     });
 });
 EOT;
@@ -216,7 +212,7 @@ EOT;
 
             if (is_array($value)) {
                 if (Arr::isAssoc($value)) {
-                    $resources[] = array_get($value, $idField);
+                    $resources[] = Arr::get($value, $idField);
                 } else {
                     $resources = array_column($value, $idField);
                 }

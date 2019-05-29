@@ -4,7 +4,6 @@ namespace Encore\Admin\Form\Field;
 
 use Encore\Admin\Form\Field;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class MultipleFile extends Field
@@ -79,9 +78,9 @@ class MultipleFile extends Field
 
         $attributes[$this->column] = $this->label;
 
-        list($rules, $input) = $this->hydrateFiles(array_get($input, $this->column, []));
+        list($rules, $input) = $this->hydrateFiles(Arr::get($input, $this->column, []));
 
-        return Validator::make($input, $rules, $this->validationMessages, $attributes);
+        return \validator($input, $rules, $this->getValidationMessages(), $attributes);
     }
 
     /**
@@ -187,7 +186,7 @@ class MultipleFile extends Field
     {
         $files = $this->value ?: [];
 
-        return array_map([$this, 'objectUrl'], $files);
+        return array_values(array_map([$this, 'objectUrl'], $files));
     }
 
     /**
@@ -240,8 +239,7 @@ class MultipleFile extends Field
     }
 
     /**
-     * @param array $options
-     * @param array $options
+     * @param string $options
      */
     protected function setupScripts($options)
     {
@@ -329,20 +327,22 @@ EOT;
     /**
      * Destroy original files.
      *
-     * @return string.
+     * @param string $key
+     *
+     * @return array.
      */
     public function destroy($key)
     {
         $files = $this->original ?: [];
 
-        $file = array_get($files, $key);
+        $file = Arr::get($files, $key);
 
-        if ($this->storage->exists($file)) {
+        if (!$this->retainable && $this->storage->exists($file)) {
             $this->storage->delete($file);
         }
 
         unset($files[$key]);
 
-        return array_values($files);
+        return $files;
     }
 }

@@ -12,7 +12,7 @@ abstract class AbstractExporter implements ExporterInterface
     protected $grid;
 
     /**
-     * @var integer
+     * @var int
      */
     protected $page;
 
@@ -88,19 +88,19 @@ abstract class AbstractExporter implements ExporterInterface
      */
     public function getQuery()
     {
-        $model = $this->grid->model();
+        $model = $this->grid->getFilter()->getModel();
 
         $queryBuilder = $model->getQueryBuilder();
 
         // Export data of giving page number.
         if ($this->page) {
-
             $keyName = $this->grid->getKeyName();
+            $perPage = request($model->getPerPageName(), $model->getPerPage());
 
             $scope = (clone $queryBuilder)
                 ->select([$keyName])
                 ->setEagerLoads([])
-                ->forPage($this->page, request($model->getPerPageName()))->get();
+                ->forPage($this->page, $perPage)->get();
 
             $queryBuilder->whereIn($keyName, $scope->pluck($keyName));
         }
